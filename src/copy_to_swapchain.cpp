@@ -6,7 +6,7 @@ void Copy_To_Swapchain::create() {
     set_layout = Descriptor_Set_Layout()
         .sampler        (0, VK_SHADER_STAGE_COMPUTE_BIT)
         .sampled_image  (1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .storage_image  (2, VK_SHADER_STAGE_COMPUTE_BIT)
+        .storage_image  (2, VK_SHADER_STAGE_COMPUTE_BIT, VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT)
         .create         ("copy_to_swapchain_set_layout");
 
     // pipeline layout

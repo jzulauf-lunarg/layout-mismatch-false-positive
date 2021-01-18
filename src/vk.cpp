@@ -251,10 +251,14 @@ static void create_device(GLFWwindow* window) {
         queue_desc.queueCount       = 1;
         queue_desc.pQueuePriorities = &priority;
 
+        VkPhysicalDeviceVulkan12Features features12{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+        features12.descriptorBindingStorageImageUpdateAfterBind = VK_TRUE;
+
         VkPhysicalDeviceFeatures features {};
         features.vertexPipelineStoresAndAtomics = VK_TRUE; // to shut up improper validation warning (image store is in the raygen shader not in the vertex stage)
 
         VkDeviceCreateInfo device_desc { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+        device_desc.pNext = &features12;
         device_desc.queueCreateInfoCount    = 1;
         device_desc.pQueueCreateInfos       = &queue_desc;
         device_desc.enabledExtensionCount   = (uint32_t)device_extensions.size();
@@ -468,6 +472,7 @@ void vk_initialize(GLFWwindow* window, bool enable_validation_layers) {
             pool_sizes.push_back(descriptor_pool_sizes[i]);
         }
         VkDescriptorPoolCreateInfo desc{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+        desc.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
         desc.maxSets = max_descriptor_sets;
         desc.poolSizeCount = (uint32_t)pool_sizes.size();
         desc.pPoolSizes = pool_sizes.data();

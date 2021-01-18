@@ -135,8 +135,9 @@ Descriptor_Set_Layout& Descriptor_Set_Layout::sampled_image(uint32_t binding, Vk
     return *this;
 }
 
-Descriptor_Set_Layout& Descriptor_Set_Layout::storage_image(uint32_t binding, VkShaderStageFlags stage_flags) {
+Descriptor_Set_Layout& Descriptor_Set_Layout::storage_image(uint32_t binding, VkShaderStageFlags stage_flags, VkDescriptorBindingFlags binding_flags) {
     assert(binding_count < max_bindings);
+    this->binding_flags[binding_count] = binding_flags;
     bindings[binding_count++] = get_set_layout_binding(binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, stage_flags);
     return *this;
 }
@@ -166,9 +167,22 @@ Descriptor_Set_Layout& Descriptor_Set_Layout::accelerator(uint32_t binding, VkSh
 }
 
 VkDescriptorSetLayout Descriptor_Set_Layout::create(const char* name) {
+    bool has_update_after_bind = false;
+    for (uint32_t i = 0; i < binding_count; i++)
+        if (binding_flags[i] & VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT) {
+            has_update_after_bind = true;
+            break;
+        }
+
+    VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags_info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO };
+    binding_flags_info.bindingCount = binding_count;
+    binding_flags_info.pBindingFlags = binding_flags;
+
     VkDescriptorSetLayoutCreateInfo create_info { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    create_info.bindingCount    = binding_count;
-    create_info.pBindings       = bindings;
+    create_info.pNext = has_update_after_bind ? &binding_flags_info : nullptr;
+    create_info.flags = has_update_after_bind ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT : 0;
+    create_info.bindingCount = binding_count;
+    create_info.pBindings = bindings;
 
     VkDescriptorSetLayout set_layout;
     VK_CHECK(vkCreateDescriptorSetLayout(vk.device, &create_info, nullptr, &set_layout));

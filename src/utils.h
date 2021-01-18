@@ -45,6 +45,7 @@ struct Descriptor_Set_Layout {
     static constexpr uint32_t max_bindings = 32;
 
     VkDescriptorSetLayoutBinding bindings[max_bindings];
+    VkDescriptorBindingFlags binding_flags[max_bindings] = {};
     uint32_t binding_count;
 
     Descriptor_Set_Layout() {
@@ -52,7 +53,7 @@ struct Descriptor_Set_Layout {
     }
 
     Descriptor_Set_Layout& sampled_image    (uint32_t binding, VkShaderStageFlags stage_flags);
-    Descriptor_Set_Layout& storage_image    (uint32_t binding, VkShaderStageFlags stage_flags);
+    Descriptor_Set_Layout& storage_image    (uint32_t binding, VkShaderStageFlags stage_flags, VkDescriptorBindingFlags binding_flags = 0);
     Descriptor_Set_Layout& sampler          (uint32_t binding, VkShaderStageFlags stage_flags);
     Descriptor_Set_Layout& uniform_buffer   (uint32_t binding, VkShaderStageFlags stage_flags);
     Descriptor_Set_Layout& storage_buffer   (uint32_t binding, VkShaderStageFlags stage_flags);
