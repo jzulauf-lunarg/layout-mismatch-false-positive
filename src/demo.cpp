@@ -6,10 +6,6 @@
 #include "utils.h"
 
 #include "glfw/glfw3.h"
-#include "imgui/imgui.h"
-#include "imgui/imgui_internal.h"
-#include "imgui/impl/imgui_impl_vulkan.h"
-#include "imgui/impl/imgui_impl_glfw.h"
 
 #include <cinttypes>
 #include <chrono>
@@ -92,37 +88,6 @@ void Vk_Demo::initialize(GLFWwindow* window, bool enable_validation_layers) {
 
         VK_CHECK(vkCreateSampler(vk.device, &create_info, nullptr, &sampler));
         vk_set_debug_name(sampler, "diffuse_texture_sampler");
-    }
-
-    // UI render pass.
-    {
-        VkAttachmentDescription attachments[1] = {};
-        attachments[0].format           = VK_FORMAT_R16G16B16A16_SFLOAT;
-        attachments[0].samples          = VK_SAMPLE_COUNT_1_BIT;
-        attachments[0].loadOp           = VK_ATTACHMENT_LOAD_OP_LOAD;
-        attachments[0].storeOp          = VK_ATTACHMENT_STORE_OP_STORE;
-        attachments[0].stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachments[0].stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachments[0].initialLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachments[0].finalLayout      = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference color_attachment_ref;
-        color_attachment_ref.attachment = 0;
-        color_attachment_ref.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass{};
-        subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount    = 1;
-        subpass.pColorAttachments       = &color_attachment_ref;
-
-        VkRenderPassCreateInfo create_info{ VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
-        create_info.attachmentCount = (uint32_t)std::size(attachments);
-        create_info.pAttachments = attachments;
-        create_info.subpassCount = 1;
-        create_info.pSubpasses = &subpass;
-
-        VK_CHECK(vkCreateRenderPass(vk.device, &create_info, nullptr, &ui_render_pass));
-        vk_set_debug_name(ui_render_pass, "ui_render_pass");
     }
 
     uniform_buffer = vk_create_host_visible_buffer(static_cast<VkDeviceSize>(sizeof(Uniform_Buffer)),
@@ -248,49 +213,16 @@ void Vk_Demo::initialize(GLFWwindow* window, bool enable_validation_layers) {
 
     copy_to_swapchain.create();
     restore_resolution_dependent_resources();
-
-    // ImGui setup.
-    {
-        ImGui::CreateContext();
-        ImGui_ImplGlfw_InitForVulkan(window, true);
-
-        ImGui_ImplVulkan_InitInfo init_info{};
-        init_info.Instance          = vk.instance;
-        init_info.PhysicalDevice    = vk.physical_device;
-        init_info.Device            = vk.device;
-        init_info.QueueFamily       = vk.queue_family_index;
-        init_info.Queue             = vk.queue;
-        init_info.DescriptorPool    = vk.descriptor_pool;
-
-        ImGui_ImplVulkan_Init(&init_info, ui_render_pass);
-        ImGui::StyleColorsDark();
-
-        vk_execute(vk.command_pools[0], vk.queue, [](VkCommandBuffer cb) {
-            ImGui_ImplVulkan_CreateFontsTexture(cb);
-        });
-        ImGui_ImplVulkan_InvalidateFontUploadObjects();
-    }
-
-    gpu_times.frame = time_keeper.allocate_time_interval();
-    gpu_times.draw = time_keeper.allocate_time_interval();
-    gpu_times.ui = time_keeper.allocate_time_interval();
-    gpu_times.compute_copy = time_keeper.allocate_time_interval();
-    time_keeper.initialize_time_intervals();
 }
 
 void Vk_Demo::shutdown() {
     VK_CHECK(vkDeviceWaitIdle(vk.device));
-
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
 
     vertex_buffer.destroy();
     index_buffer.destroy();
     texture.destroy();
     copy_to_swapchain.destroy();
     vkDestroySampler(vk.device, sampler, nullptr);
-    vkDestroyRenderPass(vk.device, ui_render_pass, nullptr);
     release_resolution_dependent_resources();
     uniform_buffer.destroy();
     vkDestroyDescriptorSetLayout(vk.device, descriptor_set_layout, nullptr);
@@ -302,9 +234,6 @@ void Vk_Demo::shutdown() {
 }
 
 void Vk_Demo::release_resolution_dependent_resources() {
-    vkDestroyFramebuffer(vk.device, ui_framebuffer, nullptr);
-    ui_framebuffer = VK_NULL_HANDLE;
-
     vkDestroyFramebuffer(vk.device, framebuffer, nullptr);
     framebuffer = VK_NULL_HANDLE;
 
@@ -316,19 +245,6 @@ void Vk_Demo::restore_resolution_dependent_resources() {
     {
         output_image = vk_create_image(vk.surface_size.width, vk.surface_size.height, VK_FORMAT_R16G16B16A16_SFLOAT,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, "output_image");
-    }
-
-    // imgui framebuffer
-    {
-        VkFramebufferCreateInfo create_info { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
-        create_info.renderPass      = ui_render_pass;
-        create_info.attachmentCount = 1;
-        create_info.pAttachments    = &output_image.view;
-        create_info.width           = vk.surface_size.width;
-        create_info.height          = vk.surface_size.height;
-        create_info.layers          = 1;
-
-        VK_CHECK(vkCreateFramebuffer(vk.device, &create_info, nullptr, &ui_framebuffer));
     }
     
     VkImageView attachments[] = {output_image.view, vk.depth_info.image_view};
@@ -371,28 +287,18 @@ void Vk_Demo::run_frame() {
     camera_to_world_transform.set_column(2, Vector3(view_transform.get_row(2)));
     camera_to_world_transform.set_column(3, camera_pos);
 
-    do_imgui();
     draw_frame();
 }
 
 void Vk_Demo::draw_frame() {
     vk_begin_frame();
-    begin_gpu_marker_scope(vk.command_buffer, "draw_frame");
-    time_keeper.next_frame();
-    gpu_times.frame->begin();
-
     draw_rasterized_image();
-    draw_imgui();
     copy_output_image_to_swapchain();
-    gpu_times.frame->end();
-
-    end_gpu_marker_scope(vk.command_buffer);
     vk_end_frame();
 }
 
 void Vk_Demo::draw_rasterized_image() {
     GPU_MARKER_SCOPE(vk.command_buffer, "draw_rasterized_image");
-    GPU_TIME_SCOPE(gpu_times.draw);
 
     VkViewport viewport{};
     viewport.width = static_cast<float>(vk.surface_size.width);
@@ -428,36 +334,7 @@ void Vk_Demo::draw_rasterized_image() {
     vkCmdEndRenderPass(vk.command_buffer);
 }
 
-void Vk_Demo::draw_imgui() {
-    GPU_MARKER_SCOPE(vk.command_buffer, "draw_imgui");
-    GPU_TIME_SCOPE(gpu_times.ui);
-
-    ImGui::Render();
-
-    vk_cmd_image_barrier(vk.command_buffer, output_image.handle,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        0,                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-    VkRenderPassBeginInfo render_pass_begin_info{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-    render_pass_begin_info.renderPass           = ui_render_pass;
-    render_pass_begin_info.framebuffer          = ui_framebuffer;
-    render_pass_begin_info.renderArea.extent    = vk.surface_size;
-
-    vkCmdBeginRenderPass(vk.command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), vk.command_buffer);
-    vkCmdEndRenderPass(vk.command_buffer);
-
-    vk_cmd_image_barrier(vk.command_buffer, output_image.handle,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,           VK_ACCESS_SHADER_READ_BIT,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
 void Vk_Demo::copy_output_image_to_swapchain() {
-    GPU_MARKER_SCOPE(vk.command_buffer, "copy_output_image_to_swapchain");
-    GPU_TIME_SCOPE(gpu_times.compute_copy);
-
     const uint32_t group_size_x = 32; // according to shader
     const uint32_t group_size_y = 32;
 
@@ -484,65 +361,4 @@ void Vk_Demo::copy_output_image_to_swapchain() {
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
         VK_ACCESS_SHADER_WRITE_BIT,             0,
         VK_IMAGE_LAYOUT_GENERAL,                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-}
-
-void Vk_Demo::do_imgui() {
-    ImGuiIO& io = ImGui::GetIO();
-
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    if (!io.WantCaptureKeyboard) {
-        if (ImGui::IsKeyPressed(GLFW_KEY_F10)) {
-            show_ui = !show_ui;
-        }
-        if (ImGui::IsKeyPressed(GLFW_KEY_W) || ImGui::IsKeyPressed(GLFW_KEY_UP)) {
-            camera_pos.z -= 0.2f;
-        }
-        if (ImGui::IsKeyPressed(GLFW_KEY_S) || ImGui::IsKeyPressed(GLFW_KEY_DOWN)) {
-            camera_pos.z += 0.2f;
-        }
-    }
-
-    if (show_ui) {
-        const float DISTANCE = 10.0f;
-        static int corner = 0;
-
-        ImVec2 window_pos = ImVec2((corner & 1) ? ImGui::GetIO().DisplaySize.x - DISTANCE : DISTANCE,
-                                   (corner & 2) ? ImGui::GetIO().DisplaySize.y - DISTANCE : DISTANCE);
-
-        ImVec2 window_pos_pivot = ImVec2((corner & 1) ? 1.0f : 0.0f, (corner & 2) ? 1.0f : 0.0f);
-
-        if (corner != -1)
-            ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
-        ImGui::SetNextWindowBgAlpha(0.3f);
-
-        if (ImGui::Begin("UI", &show_ui, 
-            (corner != -1 ? ImGuiWindowFlags_NoMove : 0) | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav))
-        {
-            ImGui::Text("%.1f FPS (%.3f ms/frame)", ImGui::GetIO().Framerate, 1000.0f / ImGui::GetIO().Framerate);
-            ImGui::Text("Frame time         : %.2f ms", gpu_times.frame->length_ms);
-            ImGui::Text("Draw time          : %.2f ms", gpu_times.draw->length_ms);
-            ImGui::Text("UI time            : %.2f ms", gpu_times.ui->length_ms);
-            ImGui::Text("Compute copy time  : %.2f ms", gpu_times.compute_copy->length_ms);
-            ImGui::Separator();
-            ImGui::Spacing();
-            ImGui::Checkbox("Vertical sync", &vsync);
-            ImGui::Checkbox("Animate", &animate);
-
-            if (ImGui::BeginPopupContextWindow()) {
-                if (ImGui::MenuItem("Custom",       NULL, corner == -1)) corner = -1;
-                if (ImGui::MenuItem("Top-left",     NULL, corner == 0)) corner = 0;
-                if (ImGui::MenuItem("Top-right",    NULL, corner == 1)) corner = 1;
-                if (ImGui::MenuItem("Bottom-left",  NULL, corner == 2)) corner = 2;
-                if (ImGui::MenuItem("Bottom-right", NULL, corner == 3)) corner = 3;
-                if (ImGui::MenuItem("Close")) show_ui = false;
-                ImGui::EndPopup();
-            }
-        }
-        ImGui::End();
-    }
 }

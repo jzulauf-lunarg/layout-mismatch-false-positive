@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
     glfwSetKeyCallback(glfw_window, glfw_key_callback);
 
     Vk_Demo demo{};
-    demo.initialize(glfw_window, options.enable_validation_layers);
+    demo.initialize(glfw_window, true);
 
     bool prev_vsync = demo.vsync_enabled();
 

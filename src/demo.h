@@ -17,15 +17,12 @@ public:
     void release_resolution_dependent_resources();
     void restore_resolution_dependent_resources();
     bool vsync_enabled() const { return vsync; }
-
     void run_frame();
 
 private:
     void draw_frame();
     void draw_rasterized_image();
-    void draw_imgui();
     void copy_output_image_to_swapchain();
-    void do_imgui();
 
 private:
     using Clock = std::chrono::high_resolution_clock;
@@ -38,8 +35,6 @@ private:
     Time                        last_frame_time;
     double                      sim_time;
 
-    VkRenderPass                ui_render_pass;
-    VkFramebuffer               ui_framebuffer;
     Vk_Image                    output_image;
     Copy_To_Swapchain           copy_to_swapchain;
 
@@ -62,12 +57,4 @@ private:
     Vector3                     camera_pos = Vector3(0, 0.5, 3.0);
     Matrix3x4                   model_transform;
     Matrix3x4                   view_transform;
-
-    GPU_Time_Keeper             time_keeper;
-    struct {
-        GPU_Time_Interval*      frame;
-        GPU_Time_Interval*      draw;
-        GPU_Time_Interval*      ui;
-        GPU_Time_Interval*      compute_copy;
-    } gpu_times;
 };
