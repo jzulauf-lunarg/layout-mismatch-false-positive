@@ -1,0 +1,8 @@
+.vs/
+build/
+imgui.ini
+
+data/*
+!data/model
+
+*.user
