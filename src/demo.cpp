@@ -260,18 +260,9 @@ void Vk_Demo::restore_resolution_dependent_resources() {
     vk_set_debug_name(framebuffer, "color_depth_framebuffer");
 
     copy_to_swapchain.update_resolution_dependent_descriptors(output_image.view);
-    last_frame_time = Clock::now();
 }
 
 void Vk_Demo::run_frame() {
-    Time current_time = Clock::now();
-    if (animate) {
-        double time_delta = std::chrono::duration_cast<std::chrono::microseconds>(current_time - last_frame_time).count() / 1e6;
-        sim_time += time_delta;
-    }
-    last_frame_time = current_time;
-
-    model_transform = rotate_y(Matrix3x4::identity, (float)sim_time * radians(20.0f));
     view_transform = look_at_transform(camera_pos, Vector3(0), Vector3(0, 1, 0));
 
     float aspect_ratio = (float)vk.surface_size.width / (float)vk.surface_size.height;

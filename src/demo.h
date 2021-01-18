@@ -16,7 +16,6 @@ public:
 
     void release_resolution_dependent_resources();
     void restore_resolution_dependent_resources();
-    bool vsync_enabled() const { return vsync; }
     void run_frame();
 
 private:
@@ -25,16 +24,6 @@ private:
     void copy_output_image_to_swapchain();
 
 private:
-    using Clock = std::chrono::high_resolution_clock;
-    using Time  = std::chrono::time_point<Clock>;
-
-    bool                        show_ui                 = true;
-    bool                        vsync                   = true;
-    bool                        animate                 = false;
-
-    Time                        last_frame_time;
-    double                      sim_time;
-
     Vk_Image                    output_image;
     Copy_To_Swapchain           copy_to_swapchain;
 
@@ -55,6 +44,6 @@ private:
     VkSampler                   sampler;
 
     Vector3                     camera_pos = Vector3(0, 0.5, 3.0);
-    Matrix3x4                   model_transform;
+    Matrix3x4                   model_transform = Matrix3x4::identity;
     Matrix3x4                   view_transform;
 };
